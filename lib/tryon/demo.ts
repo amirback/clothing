@@ -12,6 +12,9 @@ import type { TryOnProvider, TryOnRequest, TryOnResult } from "./types";
 const WIDTH = 900;
 const HEIGHT = 1200;
 
+/** Imitated latency, so the loading state can be exercised. Tests set it to 0. */
+const DEMO_DELAY_MS = Number(process.env.DEMO_DELAY_MS ?? 2_500);
+
 function escapeXml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -25,8 +28,8 @@ export function createDemoProvider(): TryOnProvider {
     async run(request: TryOnRequest): Promise<TryOnResult> {
       const startedAt = Date.now();
       // Imitates the latency of a real generation so the loading indicator,
-      // cancellation and timeouts can be tested honestly.
-      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      // cancellation and timeouts can be exercised honestly.
+      if (DEMO_DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, DEMO_DELAY_MS));
 
       const person = escapeXml(request.personImage);
       const garment = escapeXml(request.garmentImage);

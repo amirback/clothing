@@ -14,6 +14,7 @@ type Props = {
   errorText: string | null;
   elapsedSeconds: number;
   onRetry: () => void;
+  onTryAnother: () => void;
 };
 
 /** CDN results go through our proxy to force a download; data URIs go direct. */
@@ -34,6 +35,7 @@ export function ResultStage({
   errorText,
   elapsedSeconds,
   onRetry,
+  onTryAnother,
 }: Props) {
   return (
     <div className="flex flex-col gap-4">
@@ -97,6 +99,10 @@ export function ResultStage({
             <DownloadIcon />
             {dict.studio.result.download}
           </a>
+          <button type="button" onClick={onTryAnother} className="btn btn-ghost h-11 w-full text-sm">
+            <RepeatIcon />
+            {dict.studio.result.tryAnother}
+          </button>
           <p className="text-center text-xs text-ink-muted">
             {result.demo
               ? dict.studio.result.demoNote
@@ -105,6 +111,16 @@ export function ResultStage({
         </div>
       )}
     </div>
+  );
+}
+
+function RepeatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden="true">
+      <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 4.5v4.4h-4.4M20 12a8 8 0 0 1-13.7 5.6L4 15.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 19.5v-4.4h4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

@@ -48,7 +48,7 @@ export async function GET(request: Request): Promise<Response> {
   return new Response(upstream.body, {
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="tryon-${Date.now()}.${extension}"`,
+      "Content-Disposition": `attachment; filename="try-on-${Date.now()}.${extension}"`,
       "Cache-Control": "no-store",
     },
   });

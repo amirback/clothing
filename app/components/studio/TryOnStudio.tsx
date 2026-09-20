@@ -38,6 +38,7 @@ export function TryOnStudio({
 
   const abortRef = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const garmentRef = useRef<HTMLElement>(null);
 
   // Live counter beside the spinner, so a slow generation never looks stuck.
   useEffect(() => {
@@ -144,7 +145,7 @@ export function TryOnStudio({
               </div>
             </Step>
 
-            <Step index={2} label={dict.studio.stepLabel} title={dict.studio.garment.title}>
+            <Step index={2} label={dict.studio.stepLabel} title={dict.studio.garment.title} ref={garmentRef}>
               <div className="flex flex-col gap-4">
                 <div className="flex w-fit gap-1 rounded-full bg-sunken p-1" role="group" aria-label={dict.studio.garment.title}>
                   <Tab active={garmentSource === "catalog"} onClick={() => setGarmentSource("catalog")}>
@@ -215,6 +216,12 @@ export function TryOnStudio({
                 errorText={errorText}
                 elapsedSeconds={elapsedSeconds}
                 onRetry={() => void runTryOn()}
+                onTryAnother={() => {
+                  setStatus("idle");
+                  setResult(null);
+                  setErrorText(null);
+                  garmentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
               />
             </Step>
           </div>
@@ -229,14 +236,16 @@ function Step({
   label,
   title,
   children,
+  ref,
 }: {
   index: number;
   label: string;
   title: string;
   children: React.ReactNode;
+  ref?: React.Ref<HTMLElement>;
 }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section ref={ref} className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <span
           aria-hidden="true"
