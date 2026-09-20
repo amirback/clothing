@@ -10,9 +10,9 @@ import type { CatalogItem } from "./catalog";
  */
 
 const MIME_BY_EXTENSION: Record<string, string> = {
-  ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".png": "image/png",
   ".webp": "image/webp",
 };
 

@@ -1,3 +1,5 @@
+import type { ErrorCode } from "@/lib/i18n/dictionaries/ru";
+
 /**
  * GET /api/download?url=... — streams a generated image back as a file download.
  *
@@ -13,6 +15,11 @@ const ALLOWED_HOSTS = (process.env.DOWNLOAD_ALLOWED_HOSTS ?? "cdn.fashn.ai,fashn
   .map((host) => host.trim().toLowerCase())
   .filter(Boolean);
 
+/** Same contract as /api/tryon: a translation key, never prose. */
+function fail(code: ErrorCode, status: number) {
+  return Response.json({ code, params: {} }, { status, headers: { "Cache-Control": "no-store" } });
+}
+
 function isAllowed(url: URL): boolean {
   if (url.protocol !== "https:") return false;
   const host = url.hostname.toLowerCase();
@@ -21,25 +28,19 @@ function isAllowed(url: URL): boolean {
 
 export async function GET(request: Request): Promise<Response> {
   const raw = new URL(request.url).searchParams.get("url");
-  if (!raw) {
-    return Response.json({ error: "Не указан адрес изображения." }, { status: 400 });
-  }
+  if (!raw) return fail("BAD_IMAGE", 400);
 
   let target: URL;
   try {
     target = new URL(raw);
   } catch {
-    return Response.json({ error: "Некорректный адрес изображения." }, { status: 400 });
+    return fail("BAD_IMAGE", 400);
   }
 
-  if (!isAllowed(target)) {
-    return Response.json({ error: "Этот адрес нельзя скачать." }, { status: 400 });
-  }
+  if (!isAllowed(target)) return fail("BAD_IMAGE", 400);
 
   const upstream = await fetch(target, { signal: request.signal, cache: "no-store" });
-  if (!upstream.ok || !upstream.body) {
-    return Response.json({ error: "Не удалось скачать изображение." }, { status: 502 });
-  }
+  if (!upstream.ok || !upstream.body) return fail("UNAVAILABLE", 502);
 
   const contentType = upstream.headers.get("content-type") ?? "image/jpeg";
   const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";

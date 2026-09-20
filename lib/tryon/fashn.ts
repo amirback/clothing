@@ -1,3 +1,4 @@
+import type { ErrorCode } from "@/lib/i18n/dictionaries/ru";
 import {
   TryOnError,
   type TryOnProvider,
@@ -40,19 +41,13 @@ function readError(error: unknown): string | null {
   return JSON.stringify(error);
 }
 
-/** Maps provider failures to messages we are willing to show to a visitor. */
-function userFacingError(raw: string): string {
+/** Maps a provider failure to a translation key the browser can render. */
+function errorCodeFor(raw: string): ErrorCode {
   const text = raw.toLowerCase();
-  if (text.includes("moderation") || text.includes("nsfw")) {
-    return "Фото не прошло модерацию. Загрузите обычное фото в одежде, в полный рост или по пояс.";
-  }
-  if (text.includes("pose") || text.includes("no person") || text.includes("detect")) {
-    return "Не удалось распознать человека на фото. Нужен снимок анфас, целиком в кадре, без сильных обрезаний.";
-  }
-  if (text.includes("image") && (text.includes("load") || text.includes("invalid"))) {
-    return "Не удалось обработать изображение. Попробуйте другое фото (JPEG или PNG).";
-  }
-  return "Модель не смогла обработать эту пару фото. Попробуйте другое фото или другую вещь.";
+  if (text.includes("moderation") || text.includes("nsfw")) return "MODERATION";
+  if (text.includes("pose") || text.includes("no person") || text.includes("detect")) return "NO_PERSON";
+  if (text.includes("image") && (text.includes("load") || text.includes("invalid"))) return "BAD_IMAGE";
+  return "BAD_IMAGE";
 }
 
 async function fashnFetch(
@@ -73,10 +68,8 @@ async function fashnFetch(
       },
     });
   } catch (cause) {
-    if (signal.aborted) {
-      throw new TryOnError("Генерация заняла слишком много времени. Попробуйте ещё раз.", 504, cause);
-    }
-    throw new TryOnError("Сервис примерки недоступен. Попробуйте позже.", 503, cause);
+    if (signal.aborted) throw new TryOnError("TIMEOUT", 504, {}, cause);
+    throw new TryOnError("UNAVAILABLE", 503, {}, cause);
   }
 
   const body = await response.text();
@@ -87,15 +80,15 @@ async function fashnFetch(
     // 401/403: wrong or revoked key. 402: out of credits. Both are owner problems,
     // so the visitor gets a neutral message while the detail goes to the log.
     if (response.status === 401 || response.status === 403) {
-      throw new TryOnError("Сервис примерки не настроен. Обратитесь к администратору.", 503, detail);
+      throw new TryOnError("NOT_CONFIGURED", 503, {}, detail);
     }
     if (response.status === 402) {
-      throw new TryOnError("Закончились кредиты на генерацию. Обратитесь к администратору.", 503, detail);
+      throw new TryOnError("NO_CREDITS", 503, {}, detail);
     }
     if (response.status === 429) {
-      throw new TryOnError("Сейчас слишком много запросов. Подождите минуту и попробуйте снова.", 429, detail);
+      throw new TryOnError("RATE_LIMITED", 429, { seconds: 60 }, detail);
     }
-    throw new TryOnError(userFacingError(detail), 502, detail);
+    throw new TryOnError(errorCodeFor(detail), 502, {}, detail);
   }
 
   return parsed;
@@ -116,7 +109,7 @@ const sleep = (ms: number, signal: AbortSignal) =>
       "abort",
       () => {
         clearTimeout(timer);
-        reject(new TryOnError("Генерация заняла слишком много времени. Попробуйте ещё раз.", 504));
+        reject(new TryOnError("TIMEOUT", 504));
       },
       { once: true },
     );
@@ -153,7 +146,7 @@ export function createFashnProvider(apiKey: string): TryOnProvider {
         const predictionId = submitted?.id;
         if (!predictionId) {
           const detail = readError(submitted?.error) ?? "no prediction id in response";
-          throw new TryOnError(userFacingError(detail), 502, detail);
+          throw new TryOnError(errorCodeFor(detail), 502, {}, detail);
         }
 
         while (true) {
@@ -163,9 +156,7 @@ export function createFashnProvider(apiKey: string): TryOnProvider {
 
           if (status?.status === "completed") {
             const imageUrl = status.output?.[0];
-            if (!imageUrl) {
-              throw new TryOnError("Модель вернула пустой результат. Попробуйте ещё раз.", 502);
-            }
+            if (!imageUrl) throw new TryOnError("EMPTY_RESULT", 502);
             return {
               imageUrl,
               provider: "FASHN AI",
@@ -177,7 +168,7 @@ export function createFashnProvider(apiKey: string): TryOnProvider {
 
           if (status?.status === "failed") {
             const detail = readError(status.error) ?? "prediction failed";
-            throw new TryOnError(userFacingError(detail), 502, detail);
+            throw new TryOnError(errorCodeFor(detail), 502, {}, detail);
           }
 
           await sleep(POLL_INTERVAL_MS, controller.signal);

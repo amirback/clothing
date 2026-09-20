@@ -3,10 +3,19 @@ import { readCatalogImageAsDataUri } from "@/lib/catalog.server";
 import { checkRateLimit, clientKeyFromHeaders } from "@/lib/rate-limit";
 import { getTryOnProvider } from "@/lib/tryon";
 import { TryOnError, type GarmentCategory } from "@/lib/tryon/types";
-import { ValidationError, validateImageDataUri } from "@/lib/validation";
+import {
+  GARMENT_CODES,
+  PERSON_CODES,
+  ValidationError,
+  validateImageDataUri,
+} from "@/lib/validation";
+import type { ErrorCode } from "@/lib/i18n/dictionaries/ru";
 
 /**
  * POST /api/tryon — runs one virtual try-on.
+ *
+ * Errors come back as `{ code, params }`, never as prose: the server does not
+ * know which language the visitor reads, so the browser does the wording.
  *
  * Privacy: photos are held in memory for the duration of this request only.
  * Nothing is written to disk, to a database or to a log — see README,
@@ -26,12 +35,16 @@ type TryOnBody = {
   category?: unknown;
 };
 
+function fail(code: ErrorCode, status: number, params: Record<string, string | number> = {}) {
+  return Response.json({ code, params }, { status, headers: { "Cache-Control": "no-store" } });
+}
+
 export async function POST(request: Request): Promise<Response> {
   const limit = checkRateLimit(clientKeyFromHeaders(request.headers));
   if (!limit.allowed) {
     return Response.json(
-      { error: `Слишком много примерок подряд. Подождите ${limit.retryAfterSeconds} с.` },
-      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+      { code: "RATE_LIMITED", params: { seconds: limit.retryAfterSeconds } },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds), "Cache-Control": "no-store" } },
     );
   }
 
@@ -39,11 +52,11 @@ export async function POST(request: Request): Promise<Response> {
   try {
     body = (await request.json()) as TryOnBody;
   } catch {
-    return Response.json({ error: "Некорректный запрос." }, { status: 400 });
+    return fail("UNKNOWN", 400);
   }
 
   try {
-    const person = validateImageDataUri(body.personImage, "Фото человека");
+    const person = validateImageDataUri(body.personImage, PERSON_CODES);
 
     // Garment comes either from the catalog (by id) or as the visitor's own upload.
     let garmentImage: string;
@@ -51,13 +64,11 @@ export async function POST(request: Request): Promise<Response> {
 
     if (typeof body.garmentId === "string" && body.garmentId.length > 0) {
       const item = findCatalogItem(body.garmentId);
-      if (!item) {
-        return Response.json({ error: "Вещь из каталога не найдена." }, { status: 400 });
-      }
+      if (!item) return fail("CATALOG_NOT_FOUND", 400);
       garmentImage = await readCatalogImageAsDataUri(item);
       category = item.category;
     } else {
-      garmentImage = validateImageDataUri(body.garmentImage, "Фото одежды").dataUri;
+      garmentImage = validateImageDataUri(body.garmentImage, GARMENT_CODES).dataUri;
       category =
         typeof body.category === "string" && VALID_CATEGORIES.has(body.category)
           ? (body.category as GarmentCategory)
@@ -76,14 +87,14 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error) {
     if (error instanceof ValidationError) {
-      return Response.json({ error: error.message }, { status: 400 });
+      return fail(error.code, 400, error.params);
     }
     if (error instanceof TryOnError) {
-      // `cause` carries the provider detail; it stays server-side.
-      console.error("[tryon] provider error:", error.message, error.cause ?? "");
-      return Response.json({ error: error.message }, { status: error.status });
+      // `detail` carries the provider message; it stays server-side.
+      console.error("[tryon] provider error:", error.code, error.detail ?? "");
+      return fail(error.code, error.status, error.params);
     }
     console.error("[tryon] unexpected error:", error);
-    return Response.json({ error: "Не удалось выполнить примерку. Попробуйте ещё раз." }, { status: 500 });
+    return fail("UNKNOWN", 500);
   }
 }

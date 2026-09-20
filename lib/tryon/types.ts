@@ -1,3 +1,5 @@
+import type { ErrorCode } from "@/lib/i18n/dictionaries/ru";
+
 /**
  * Provider-agnostic contract for virtual try-on.
  *
@@ -39,14 +41,20 @@ export interface TryOnProvider {
   run(request: TryOnRequest, signal?: AbortSignal): Promise<TryOnResult>;
 }
 
-/** Error with a message that is safe to show to an end user, in Russian. */
+/**
+ * Failure carrying a translation key rather than a message.
+ *
+ * The server never decides what language the visitor reads: it returns a code
+ * and the browser renders it through the active dictionary.
+ */
 export class TryOnError extends Error {
   constructor(
-    message: string,
+    readonly code: ErrorCode,
     readonly status: number = 502,
-    readonly cause?: unknown,
+    readonly params: Record<string, string | number> = {},
+    readonly detail?: unknown,
   ) {
-    super(message);
+    super(code);
     this.name = "TryOnError";
   }
 }

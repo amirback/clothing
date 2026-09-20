@@ -37,7 +37,7 @@ export function createDemoProvider(): TryOnProvider {
   </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="#f4f4f5"/>
   <g clip-path="url(#frame)">
-    <image href="${person}" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice"/>
+    <image href="${person}" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid meet"/>
   </g>
   <g transform="translate(${WIDTH - 250} ${HEIGHT - 250})">
     <rect x="-10" y="-10" width="230" height="230" rx="16" fill="#ffffff" opacity="0.92"/>

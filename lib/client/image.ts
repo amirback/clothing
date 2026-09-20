@@ -1,3 +1,5 @@
+import type { ErrorCode } from "@/lib/i18n/dictionaries/ru";
+
 /**
  * Browser-side image preparation.
  *
@@ -10,18 +12,28 @@ export const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 const MAX_EDGE = 1024;
 const JPEG_QUALITY = 0.9;
 
-export class ImagePrepareError extends Error {}
+/** Carries a translation key so the caller renders it in the active language. */
+export class ImagePrepareError extends Error {
+  constructor(
+    readonly code: ErrorCode,
+    readonly params: Record<string, string | number> = {},
+  ) {
+    super(code);
+    this.name = "ImagePrepareError";
+  }
+}
 
 export type PreparedImage = { dataUri: string; width: number; height: number };
 
 export async function prepareImage(file: File): Promise<PreparedImage> {
   if (!file.type.startsWith("image/")) {
-    throw new ImagePrepareError("Это не изображение. Загрузите JPEG, PNG или WebP.");
+    throw new ImagePrepareError("FILE_NOT_IMAGE");
   }
   if (file.size > MAX_SOURCE_BYTES) {
-    throw new ImagePrepareError(
-      `Файл слишком большой (${(file.size / 1024 / 1024).toFixed(1)} МБ). Максимум ${MAX_SOURCE_BYTES / 1024 / 1024} МБ.`,
-    );
+    throw new ImagePrepareError("FILE_TOO_LARGE", {
+      sizeMb: (file.size / 1024 / 1024).toFixed(1),
+      maxMb: MAX_SOURCE_BYTES / 1024 / 1024,
+    });
   }
 
   const bitmap = await decode(file);
@@ -33,9 +45,8 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
-  if (!context) {
-    throw new ImagePrepareError("Браузер не смог обработать изображение.");
-  }
+  if (!context) throw new ImagePrepareError("FILE_UNREADABLE");
+
   // White backdrop: a transparent PNG would otherwise flatten to black in JPEG.
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
@@ -50,8 +61,6 @@ async function decode(file: File): Promise<ImageBitmap> {
     return await createImageBitmap(file);
   } catch {
     // Safari/HEIC and a few exotic formats land here.
-    throw new ImagePrepareError(
-      "Не удалось открыть это фото. Попробуйте сохранить его как JPEG и загрузить снова.",
-    );
+    throw new ImagePrepareError("FILE_UNREADABLE");
   }
 }
